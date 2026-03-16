@@ -20,3 +20,6 @@ A Streamlit web app that combines live stock price data with AI-powered news sen
 
 ## Disclaimer
 This tool is for educational purposes only. Not financial advice.
+
+## Live Demo
+[View Live App] (https://stock-sentiment-dashboard-nxr6hxna78abo7fgej8lhp.streamlit.app/)
