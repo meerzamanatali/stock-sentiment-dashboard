@@ -11,6 +11,23 @@ import os
 load_dotenv()
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
+name_to_ticker = {
+    "apple": "AAPL", "microsoft": "MSFT", "google": "GOOGL",
+    "alphabet": "GOOGL", "amazon": "AMZN", "tesla": "TSLA",
+    "nvidia": "NVDA", "meta": "META", "facebook": "META",
+    "netflix": "NFLX", "amd": "AMD", "intel": "INTC",
+    "jpmorgan": "JPM", "jp morgan": "JPM", "goldman sachs": "GS",
+    "bank of america": "BAC", "visa": "V", "mastercard": "MA",
+    "coinbase": "COIN", "alibaba": "BABA", "samsung": "005930.KS",
+    "tsmc": "TSM", "taiwan semiconductor": "TSM"
+}
+
+def resolve_ticker(user_input: str) -> str:
+    cleaned = user_input.strip().lower()
+    if cleaned in name_to_ticker:
+        return name_to_ticker[cleaned]
+    return user_input.strip().upper()
+
 st.set_page_config(
     page_title="Stock Sentiment Dashboard",
     page_icon="📈",
@@ -120,18 +137,23 @@ def plot_price_chart(df: pd.DataFrame, ticker: str) -> go.Figure:
     )
     return fig
 
-ticker_input = st.text_input(
-    "Stock Ticker",
-    value="AAPL",
-    placeholder="e.g. AAPL, TSLA, NVDA, MSFT",
-    help="Enter the stock ticker symbol"
-).upper().strip()
+ticker_input_raw = st.text_input(
+    "Search by company name or ticker",
+    value="Apple",
+    placeholder="e.g. Apple, Tesla, NVDA, Microsoft",
+    help="Enter company name or ticker symbol"
+)
+ticker_input = resolve_ticker(ticker_input_raw)
+
+if ticker_input_raw.strip().lower() in name_to_ticker:
+    st.caption(f"Resolved to ticker: {ticker_input}")
 
 company_map = {
     "AAPL": "Apple", "TSLA": "Tesla", "NVDA": "Nvidia",
     "MSFT": "Microsoft", "GOOGL": "Google", "AMZN": "Amazon",
     "META": "Meta", "NFLX": "Netflix"
 }
+
 company_name = company_map.get(ticker_input, ticker_input)
 
 analyze_btn = st.button("Analyze", type="primary", use_container_width=False)
