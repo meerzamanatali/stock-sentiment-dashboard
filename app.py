@@ -3,7 +3,6 @@ import yfinance as yf
 import requests
 import pandas as pd
 import plotly.graph_objects as go
-from transformers import pipeline
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
