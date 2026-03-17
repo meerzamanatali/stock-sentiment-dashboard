@@ -10,6 +10,8 @@ import os
 
 load_dotenv()
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+HF_API_URL = "https://api-inference.huggingface.co/models/ProsusAI/finbert"
 
 name_to_ticker = {
     "apple": "AAPL", "microsoft": "MSFT", "google": "GOOGL",
@@ -36,14 +38,6 @@ st.set_page_config(
 
 st.title("📈 AI Stock Sentiment & Signal Dashboard")
 st.markdown("Enter any stock ticker to get live price data, news sentiment analysis, and an AI-generated market signal.")
-
-@st.cache_resource(show_spinner="Loading AI sentiment model...")
-def load_sentiment_model():
-    return pipeline(
-        "text-classification",
-        model="ProsusAI/finbert",
-        return_all_scores=False
-    )
 
 def fetch_stock_data(ticker: str, days: int = 30) -> pd.DataFrame:
     end = datetime.today()
@@ -75,13 +69,21 @@ def fetch_news(ticker: str, company_name: str) -> list:
         ]
     return []
 
-def analyze_sentiment(headlines: list, model) -> list:
+def analyze_sentiment(headlines: list) -> list:
+    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     results = []
     for item in headlines:
-        prediction = model(item["title"][:512])[0]
-        label = prediction["label"].lower()
-        score = round(prediction["score"] * 100, 1)
-        results.append({**item, "sentiment": label, "confidence": score})
+        payload = {"inputs": item["title"][:512]}
+        response = requests.post(HF_API_URL, headers=headers, json=payload)
+        if response.status_code == 200:
+            score = response.json()[0]
+            best = max(score, key=lambda x: x["score"])
+            label = best["label"].lower()
+            confidence = round(best["score"] * 100, 1)
+        else:
+            label = "neutral"
+            confidence = 0.0
+        results.append({**item, "sentiment": label, "confidence": confidence})
     return results
 
 def compute_signal(sentiment_results: list, price_df: pd.DataFrame) -> dict:
@@ -108,6 +110,28 @@ def compute_signal(sentiment_results: list, price_df: pd.DataFrame) -> dict:
     else:
         return {"signal": "WATCH", "color": "#BA7517",
                 "reason": f"Mixed signals — {counts['positive']} positive, {counts['negative']} negative, {counts['neutral']} neutral headlines."}
+    
+
+def plot_sentiment_chart(sentiment_results: list) -> go.Figure:
+    counts = {"positive": 0, "negative": 0, "neutral": 0}
+    for r in sentiment_results:
+        counts[r["sentiment"]] += 1
+
+    fig = go.Figure(go.Pie(
+        labels=["Positive", "Negative", "Neutral"],
+        values=[counts["positive"], counts["negative"], counts["neutral"]],
+        hole=0.45,
+        marker=dict(colors=["#1D9E75", "#D85A30", "#888780"]),
+        textinfo="label+percent",
+        hovertemplate="%{label}: %{value} headlines<extra></extra>"
+    ))
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(l=0, r=0, t=30, b=0),
+        paper_bgcolor="white",
+        font=dict(color="#2C2C2A")
+    )
+    return fig 
 
 def plot_price_chart(df: pd.DataFrame, ticker: str) -> go.Figure:
     fig = go.Figure()
@@ -173,10 +197,8 @@ if analyze_btn and ticker_input:
         st.warning("No news articles found. Check your NewsAPI key or try a different ticker.")
         st.stop()
 
-    sentiment_model = load_sentiment_model()
-
     with st.spinner("Running AI sentiment analysis..."):
-        analyzed = analyze_sentiment(news, sentiment_model)
+        analyzed = analyze_sentiment(news)
 
     signal = compute_signal(analyzed, price_df)
 
@@ -193,8 +215,12 @@ if analyze_btn and ticker_input:
     col4.metric("AI Signal", signal["signal"])
 
     st.markdown("---")
-
-    st.plotly_chart(plot_price_chart(price_df, ticker_input), use_container_width=True)
+    col_chart, col_pie = st.columns([2, 1])
+    with col_chart:
+        st.plotly_chart(plot_price_chart(price_df, ticker_input), use_container_width=True)
+    with col_pie:
+        st.subheader("Sentiment breakdown")
+        st.plotly_chart(plot_sentiment_chart(analyzed), use_container_width=True)
 
     st.markdown("---")
     st.subheader("AI Market Signal")
